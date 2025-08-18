@@ -10,8 +10,8 @@ const port = process.env.PORT || 3000;
 // The secret key and token for encryption and request validation.
 // In a real application, these should be environment variables.
 // The key must be 32 bytes for AES-256.
-const API_TOKEN = 'your_super_secret_token_12345'; // Replace with your actual token
-const API_KEY = 'your_super_secret_key_12345678901234'; // Replace with your actual key (32 bytes)
+const API_TOKEN = 'casinoplusxigo@2025'; // Replace with your actual token
+const API_KEY = 'external_options_casinoplusxigo@2025'; // Replace with your actual key (32 bytes)
 
 const app = express();
 app.use(bodyParser.json());
