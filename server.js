@@ -275,7 +275,7 @@ app.post('/get_department_product_line', async (req, res) => {
         };
         // Add placeholder values for token and key in the response
         result.data.token = "xxxx";
-        result.data.key = "";
+        result.data.key = "x";
 
         return res.json(result);
     } catch (e) {
@@ -312,7 +312,7 @@ app.post('/get_hod', async (req, res) => {
         };
         // Add placeholder values for token and key in the response
         result.data.token = "xxxx";
-        result.data.key = "";
+        result.data.key = "x";
 
         return res.json(result);
     } catch (e) {
@@ -349,7 +349,7 @@ app.post('/get_hod_limit', async (req, res) => {
         };
         // Add placeholder values for token and key in the response
         result.data.token = "xxxx";
-        result.data.key = "";
+        result.data.key = "x";
 
         return res.json(result);
     } catch (e) {
@@ -386,7 +386,7 @@ app.post('/get_2nd_tier', async (req, res) => {
         };
         // Add placeholder values for token and key in the response
         result.data.token = "xxxx";
-        result.data.key = "";
+        result.data.key = "x";
 
         return res.json(result);
     } catch (e) {
@@ -423,7 +423,7 @@ app.post('/get_2nd_tier_limit', async (req, res) => {
         };
         // Add placeholder values for token and key in the response
         result.data.token = "xxxx";
-        result.data.key = "";
+        result.data.key = "x";
 
         return res.json(result);
     } catch (e) {
@@ -460,7 +460,7 @@ app.post('/get_ceo', async (req, res) => {
         };
         // Add placeholder values for token and key in the response
         result.data.token = "xxxx";
-        result.data.key = "";
+        result.data.key = "x";
 
         return res.json(result);
     } catch (e) {
