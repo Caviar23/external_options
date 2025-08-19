@@ -158,15 +158,13 @@ app.post('/budget_num', (req, res) => {
             }
         }
 
-        // Get the first day of the current month in "YYYY-MM-DD" format
-        const budgetMonth = moment().startOf('month').format("YYYY-MM-DD");
-
-        // Simulated database query for budget numbers
+        // --- EDITED SECTION ---
+        // We're removing the date filter and the "N/A" fallback to get all available budget numbers.
+        // In a real application, you would replace this with a database query that
+        // filters by thirdSubject.
         const subjectsList = budgetData.filter(item => 
-            item.third_level_subjects === thirdSubject && moment(item.budget_month).format("YYYY-MM-DD") === budgetMonth
+            item.third_level_subjects === thirdSubject
         ).map(item => ({ budget_num: item.budget_num }));
-
-        subjectsList.push({ budget_num: "N/A" });
 
         let optionsList = [];
         let textDict = {};
@@ -187,6 +185,7 @@ app.post('/budget_num', (req, res) => {
             });
             n++;
         }
+        // --- END OF EDITED SECTION ---
 
         const result = {
             code: 0,
