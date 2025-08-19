@@ -2,6 +2,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
+require('dotenv').config(); // Load environment variables from .env file
 
 // The port for the server to listen on. Vercel/Render will assign a port,
 // but for local testing, we'll use 3000.
