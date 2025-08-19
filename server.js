@@ -269,10 +269,14 @@ app.post('/get_department_product_line', async (req, res) => {
                         isDefault: false
                     })),
                     hasMore: false,
-                    nextPageToken: "xxxx"
+                    nextPageToken: ""
                 }
             }
         };
+        // Add placeholder values for token and key in the response
+        result.data.token = "xxxx";
+        result.data.key = "";
+
         return res.json(result);
     } catch (e) {
         console.error('Error in /get_department_product_line:', e);
@@ -302,10 +306,14 @@ app.post('/get_hod', async (req, res) => {
                         isDefault: false
                     })),
                     hasMore: false,
-                    nextPageToken: "xxxx"
+                    nextPageToken: ""
                 }
             }
         };
+        // Add placeholder values for token and key in the response
+        result.data.token = "xxxx";
+        result.data.key = "";
+
         return res.json(result);
     } catch (e) {
         console.error('Error in /get_hod:', e);
@@ -335,10 +343,14 @@ app.post('/get_hod_limit', async (req, res) => {
                         isDefault: false
                     })),
                     hasMore: false,
-                    nextPageToken: "xxxx"
+                    nextPageToken: ""
                 }
             }
         };
+        // Add placeholder values for token and key in the response
+        result.data.token = "xxxx";
+        result.data.key = "";
+
         return res.json(result);
     } catch (e) {
         console.error('Error in /get_hod_limit:', e);
@@ -368,10 +380,14 @@ app.post('/get_2nd_tier', async (req, res) => {
                         isDefault: false
                     })),
                     hasMore: false,
-                    nextPageToken: "xxxx"
+                    nextPageToken: ""
                 }
             }
         };
+        // Add placeholder values for token and key in the response
+        result.data.token = "xxxx";
+        result.data.key = "";
+
         return res.json(result);
     } catch (e) {
         console.error('Error in /get_2nd_tier:', e);
@@ -401,10 +417,14 @@ app.post('/get_2nd_tier_limit', async (req, res) => {
                         isDefault: false
                     })),
                     hasMore: false,
-                    nextPageToken: "xxxx"
+                    nextPageToken: ""
                 }
             }
         };
+        // Add placeholder values for token and key in the response
+        result.data.token = "xxxx";
+        result.data.key = "";
+
         return res.json(result);
     } catch (e) {
         console.error('Error in /get_2nd_tier_limit:', e);
@@ -434,10 +454,14 @@ app.post('/get_ceo', async (req, res) => {
                         isDefault: false
                     })),
                     hasMore: false,
-                    nextPageToken: "xxxx"
+                    nextPageToken: ""
                 }
             }
         };
+        // Add placeholder values for token and key in the response
+        result.data.token = "xxxx";
+        result.data.key = "";
+
         return res.json(result);
     } catch (e) {
         console.error('Error in /get_ceo:', e);
