@@ -54,7 +54,7 @@ class CWLarkAPI {
      * @returns {Promise<string>} The access token.
      */
     async _getAppToken() {
-        const url = "https://casinoplus.sg.larksuite.com/wiki/Gflaw9RBkiaHAokB4axlHLpygVb?table=tblLSW8oShBhPOZg&view=vewa7hu3aU";
+        const url = "https://open.larksuite.com/open-apis/auth/v3/app_access_token/internal";
         const headers = {
             "Content-Type": "application/json; charset=utf-8"
         };
