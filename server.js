@@ -98,7 +98,7 @@ class CWLarkAPI {
      */
     async getRecords(baseId, tableId, filters = '', fieldNames = '', viewId = '', pageSize = 100) {
         const token = await this.getToken();
-        const url = `https://open.larksuite.com/open-apis/bitable/v1/apps/${baseId}/tables/${tableId}/records`;
+        const url = `https://casinoplus.sg.larksuite.com/wiki/${baseId}?table=${tableId}&view=vewa7hu3aU`;
         const headers = { "Authorization": `Bearer ${token}` };
         const params = {
             page_size: pageSize,
