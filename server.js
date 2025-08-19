@@ -10,8 +10,8 @@ const port = process.env.PORT || 3000;
 // The secret key and token for encryption and request validation.
 // In a real application, these should be environment variables.
 // The key must be 32 bytes for AES-256.
-const API_TOKEN = 'casinoplusxigo@2025'; // Replace with your actual token
-const API_KEY = 'external_options_casinoplusxigo@2025'; // Replace with your actual key (32 bytes)
+const API_TOKEN = process.env.API_TOKEN; // Use environment variable
+const API_KEY = process.env.API_KEY;   // Use environment variable
 
 const app = express();
 app.use(bodyParser.json());
@@ -28,35 +28,19 @@ function encryptLarkData(source, keyStr) {
   try {
     // 1. Hash the key with SHA-256 as per the Golang example
     const key = crypto.createHash('sha256').update(keyStr).digest();
-    
-    // 2. Add PKCS7 padding to the source data
-    const sourceBytes = Buffer.from(source, 'utf8');
-    const cipher = crypto.createCipheriv('aes-256-cbc', key, Buffer.alloc(16, 0)); // IV is an empty buffer of 16 bytes for now
-    let encrypted = cipher.update(sourceBytes);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    
-    // The Lark docs show a strange padding mechanism in the Golang code.
-    // The Java code uses PKCS5Padding, which is equivalent to PKCS7Padding for block size 16.
-    // We will use the standard Node.js PKCS7 padding which is more secure and widely used.
-    
-    // The Golang code also shows prepending a 16-byte IV.
-    // The Java code uses a zero-filled IV.
-    // The provided documentation is contradictory. We'll use a standard, secure approach.
-    // The provided Java code uses a zero-filled IV, which is insecure.
-    // The Golang code reads a random IV.
-    // Let's create a random IV for security and prepend it to the ciphertext.
+
+    // 2. Create a random IV for security and prepend it to the ciphertext.
     const iv = crypto.randomBytes(16);
-    const cipherWithIV = crypto.createCipheriv('aes-256-cbc', key, iv);
-    
-    let encryptedWithIV = cipherWithIV.update(sourceBytes, 'utf8');
-    encryptedWithIV = Buffer.concat([encryptedWithIV, cipherWithIV.final()]);
-    
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+
+    let encrypted = cipher.update(source, 'utf8');
+    encrypted = Buffer.concat([encrypted, cipher.final()]);
+
     // Prepend the IV to the encrypted data for decryption later
-    const finalData = Buffer.concat([iv, encryptedWithIV]);
-    
+    const finalData = Buffer.concat([iv, encrypted]);
+
     // Return Base64-encoded string
     return finalData.toString('base64');
-    
   } catch (error) {
     console.error('Encryption failed:', error);
     return null;
@@ -69,11 +53,11 @@ function encryptLarkData(source, keyStr) {
  */
 app.post('/', (req, res) => {
   const { user_id, employee_id, token, linkage_params } = req.body;
-  
+
   console.log(`Received request from user_id: ${user_id}, employee_id: ${employee_id}`);
-  
+
   // 1. Token validation
-  if (token !== API_TOKEN) {
+  if (!API_TOKEN || token !== API_TOKEN) {
     console.error('Token validation failed.');
     return res.status(401).json({
       code: 1, // Non-zero code for failure
@@ -83,7 +67,7 @@ app.post('/', (req, res) => {
 
   // 2. Generate a sample data payload to return
   let options = [];
-  
+
   // The documentation says to return all options if linkage_params is empty.
   // We'll simulate that by returning a full list when no params are provided.
   if (!linkage_params || Object.keys(linkage_params).length === 0) {
@@ -137,7 +121,7 @@ app.post('/', (req, res) => {
 
   // Convert payload to a JSON string for encryption
   const plaintext = JSON.stringify(resultPayload);
-  
+
   // Encrypt the result
   const encryptedResult = encryptLarkData(plaintext, API_KEY);
 
@@ -158,6 +142,11 @@ app.post('/', (req, res) => {
       data: {}
     });
   }
+});
+
+// A simple GET route for Vercel's health check and browser testing
+app.get('/', (req, res) => {
+  res.send('Lark API server is running!');
 });
 
 app.listen(port, () => {
