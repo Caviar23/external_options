@@ -1,24 +1,27 @@
 // server.js
 /**
- * This file contains a complete Node.js Express server to replicate the
- * Python Flask application for the Lark external options API.
- * It includes routes for:
- * - /get_third_level_subjects
- * - /budget_num
- * - /get_loan_note
- * - /get_loan_currency
- * - /get_loan_amount
- * - /get_loan_title
+ * This file contains a complete Node.js Express server that replicates the
+ * Python Flask application's functionality, including the connection to Lark Base.
  *
- * NOTE: This code uses in-memory data to simulate a database. You will need
- * to replace the data arrays with your actual database queries.
+ * NOTE: This code uses the 'axios' library for making API requests.
+ * Please ensure you have it installed: 'npm install axios'.
+ *
+ * It uses a new CWLarkAPI class to handle all interactions with the
+ * Lark Base API, including token management and data retrieval.
+ *
+ * You MUST set up a .env file with the following variables:
+ * LARK_APP_ID=your_app_id
+ * LARK_APP_SECRET=your_app_secret
+ *
+ * You also need to replace the placeholder IDs in the code (e.g., 'Gflaw9RBkiaHAokB4axlHLpygVb').
  */
 
 // --- Dependencies & Setup ---
 const express = require('express');
 const bodyParser = require('body-parser');
-const moment = require('moment'); // Using moment.js for date handling, a common practice
-require('dotenv').config(); // Loads environment variables from a .env file
+const moment = require('moment');
+const axios = require('axios');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -26,30 +29,206 @@ const port = process.env.PORT || 3000;
 // Middleware to parse JSON body from incoming requests
 app.use(bodyParser.json());
 
-// --- Simulated Database Data (for demonstration) ---
-// This is a placeholder for your database.
-// You should replace these with actual database queries.
+// --- Lark Base API Class ---
 
-const accountingSubjects = [
-    { id: 1, third_level_subjects: '科目A', third_level_subjects_en: 'Subject A' },
-    { id: 2, third_level_subjects: '科目B', third_level_subjects_en: 'Subject B' },
-    { id: 3, third_level_subjects: '科目C', third_level_subjects_en: 'Subject C' },
-    { id: 4, third_level_subjects: '科目D', third_level_subjects_en: 'Subject D' },
-];
+/**
+ * A singleton class to handle all communication with the Lark Base API.
+ * It manages token acquisition and provides helper methods for fetching data.
+ */
+class CWLarkAPI {
+    constructor() {
+        if (CWLarkAPI._instance) {
+            return CWLarkAPI._instance;
+        }
 
-const budgetData = [
-    { third_level_subjects: '科目A', budget_month: '2024-05-01', budget_num: 'BUDGET-001' },
-    { third_level_subjects: '科目B', budget_month: '2024-05-01', budget_num: 'BUDGET-002' },
-    { third_level_subjects: '科目C', budget_month: '2024-05-01', budget_num: 'BUDGET-003' },
-    { third_level_subjects: '科目A', budget_month: '2024-04-01', budget_num: 'BUDGET-004' },
-];
+        this.appId = process.env.LARK_APP_ID;
+        this.appSecret = process.env.LARK_APP_SECRET;
+        this.token = null;
+        this.tokenExpiry = 0;
+        this.initialized = false;
+        CWLarkAPI._instance = this;
+    }
 
-const loanNotes = [
-    { lark_num: 'LN-001', status: '已通过', verify: '', currency: 'CNY', amount: 1000, lark_title: '借款单主题一' },
-    { lark_num: 'LN-002', status: '已通过', verify: '', currency: 'USD', amount: 2500, lark_title: '借款单主题二' },
-    { lark_num: 'LN-003', status: '已通过', verify: '', currency: 'EUR', amount: 500, lark_title: null },
-    { lark_num: 'LN-004', status: '待审批', verify: '', currency: 'CNY', amount: 1200, lark_title: '借款单主题四' },
-];
+    /**
+     * Retrieves the application access token from Lark.
+     * @returns {Promise<string>} The access token.
+     */
+    async _getAppToken() {
+        const url = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal";
+        const headers = {
+            "Content-Type": "application/json; charset=utf-8"
+        };
+        const postData = {
+            "app_id": this.appId,
+            "app_secret": this.appSecret
+        };
+
+        try {
+            const response = await axios.post(url, postData, { headers, timeout: 10000 });
+            return response.data["app_access_token"];
+        } catch (error) {
+            console.error('Error fetching app token:', error.response ? error.response.data : error.message);
+            throw new Error('Failed to get app token.');
+        }
+    }
+
+    /**
+     * Gets or refreshes the access token.
+     * @returns {Promise<string>} The valid access token.
+     */
+    async getToken() {
+        const currentTime = Math.floor(Date.now() / 1000);
+        // Token expires after 1 hour, we refresh it a bit earlier (3000 seconds)
+        if (currentTime - this.tokenExpiry > 3000) {
+            this.token = await this._getAppToken();
+            this.tokenExpiry = currentTime;
+        }
+        return this.token;
+    }
+
+    /**
+     * A generic method to fetch records from a Lark Base table.
+     * @param {string} baseId - The Base ID (appToken).
+     * @param {string} tableId - The table ID.
+     * @param {string} [filters=''] - The filter query.
+     * @param {string} [fieldNames=''] - A JSON string of field names.
+     * @param {string} [viewId=''] - The view ID.
+     * @param {number} [pageSize=100] - The number of records per page.
+     * @returns {Promise<Array>} An array of records.
+     */
+    async getRecords(baseId, tableId, filters = '', fieldNames = '', viewId = '', pageSize = 100) {
+        const token = await this.getToken();
+        const url = `https://open.larksuite.com/open-apis/bitable/v1/apps/${baseId}/tables/${tableId}/records`;
+        const headers = { "Authorization": `Bearer ${token}` };
+        const params = {
+            page_size: pageSize,
+            filter: filters,
+            field_names: fieldNames,
+            view_id: viewId
+        };
+
+        try {
+            const response = await axios.get(url, { headers, params, timeout: 10000 });
+            if (!response.data.data || !response.data.data.items) {
+                console.warn('No items found in response:', response.data);
+                return [];
+            }
+            return response.data.data.items;
+        } catch (error) {
+            console.error('Error fetching records:', error.response ? error.response.data : error.message);
+            throw new Error('Failed to get records from Lark Base.');
+        }
+    }
+
+    /**
+     * Fetches Department/ProductLine data.
+     * @returns {Promise<Array>} An array of records.
+     */
+    async getDepartmentProductLine() {
+        const baseId = 'Gflaw9RBkiaHAokB4axlHLpygVb'; // Replace with your Base ID
+        const tableId = 'tblLSW8oShBhPOZg'; // Replace with your Table ID
+        const fieldNames = JSON.stringify(["Department/ProductLine"]);
+
+        const records = await this.getRecords(baseId, tableId, '', fieldNames);
+
+        return records.map(record => ({
+            departmentProductLine: record.fields["Department/ProductLine"]
+        }));
+    }
+
+    /**
+     * Fetches HOD data based on a selected department.
+     * @param {string} department - The selected department name.
+     * @returns {Promise<Array>} An array of records.
+     */
+    async getHOD(department) {
+        const baseId = 'Gflaw9RBkiaHAokB4axlHLpygVb'; // Replace with your Base ID
+        const tableId = 'tblLSW8oShBhPOZg'; // Replace with your Table ID
+        const filters = `CurrentValue.[Department/ProductLine] = "${department}"`;
+        const fieldNames = JSON.stringify(["HOD"]);
+
+        const records = await this.getRecords(baseId, tableId, filters, fieldNames);
+
+        return records.map(record => ({
+            hod: record.fields.HOD
+        }));
+    }
+
+    /**
+     * Fetches HODLimit data based on a selected department.
+     * @param {string} department - The selected department name.
+     * @returns {Promise<Array>} An array of records.
+     */
+    async getHODLimit(department) {
+        const baseId = 'Gflaw9RBkiaHAokB4axlHLpygVb'; // Replace with your Base ID
+        const tableId = 'tblLSW8oShBhPOZg'; // Replace with your Table ID
+        const filters = `CurrentValue.[Department/ProductLine] = "${department}"`;
+        const fieldNames = JSON.stringify(["HODLimit"]);
+
+        const records = await this.getRecords(baseId, tableId, filters, fieldNames);
+
+        return records.map(record => ({
+            hodLimit: record.fields.HODLimit
+        }));
+    }
+
+    /**
+     * Fetches 2ndTier data based on a selected department.
+     * @param {string} department - The selected department name.
+     * @returns {Promise<Array>} An array of records.
+     */
+    async get2ndTier(department) {
+        const baseId = 'Gflaw9RBkiaHAokB4axlHLpygVb'; // Replace with your Base ID
+        const tableId = 'tblLSW8oShBhPOZg'; // Replace with your Table ID
+        const filters = `CurrentValue.[Department/ProductLine] = "${department}"`;
+        const fieldNames = JSON.stringify(["2ndTier"]);
+
+        const records = await this.getRecords(baseId, tableId, filters, fieldNames);
+
+        return records.map(record => ({
+            secondTier: record.fields["2ndTier"]
+        }));
+    }
+
+    /**
+     * Fetches 2ndTierLimit data based on a selected department.
+     * @param {string} department - The selected department name.
+     * @returns {Promise<Array>} An array of records.
+     */
+    async get2ndTierLimit(department) {
+        const baseId = 'Gflaw9RBkiaHAokB4axlHLpygVb'; // Replace with your Base ID
+        const tableId = 'tblLSW8oShBhPOZg'; // Replace with your Table ID
+        const filters = `CurrentValue.[Department/ProductLine] = "${department}"`;
+        const fieldNames = JSON.stringify(["2ndTierLimit"]);
+
+        const records = await this.getRecords(baseId, tableId, filters, fieldNames);
+
+        return records.map(record => ({
+            secondTierLimit: record.fields["2ndTierLimit"]
+        }));
+    }
+
+    /**
+     * Fetches CEO data based on a selected department.
+     * @param {string} department - The selected department name.
+     * @returns {Promise<Array>} An array of records.
+     */
+    async getCEO(department) {
+        const baseId = 'Gflaw9RBkiaHAokB4axlHLpygVb'; // Replace with your Base ID
+        const tableId = 'tblLSW8oShBhPOZg'; // Replace with your Table ID
+        const filters = `CurrentValue.[Department/ProductLine] = "${department}"`;
+        const fieldNames = JSON.stringify(["CEO"]);
+
+        const records = await this.getRecords(baseId, tableId, filters, fieldNames);
+
+        return records.map(record => ({
+            ceo: record.fields.CEO
+        }));
+    }
+}
+
+// Instantiate the API client as a singleton
+const larkApi = new CWLarkAPI();
 
 // --- Helper Functions ---
 
@@ -66,399 +245,202 @@ function containsChinese(text) {
 // --- API Endpoints ---
 
 /**
- * GET route for Vercel health checks and basic browser access.
- * Returns a simple success message.
+ * GET route for health checks.
  */
 app.get('/', (req, res) => {
     res.status(200).send('Lark API server is running!');
 });
 
 /**
- * POST /get_third_level_subjects
- * Replicates the Python function to get third-level subjects from the database.
+ * POST /get_department_product_line
+ * Fetches the Department/ProductLine data.
  */
-app.post('/get_third_level_subjects', (req, res) => {
+app.post('/get_department_product_line', async (req, res) => {
     try {
-        // Simulated database query
-        // In a real application, you would use a database client here.
-        // Example with a hypothetical DB client:
-        // const subjectsList = await db.query('SELECT third_level_subjects, third_level_subjects_en FROM AccountingSubject WHERE id BETWEEN 1 AND 140');
-        const subjectsList = accountingSubjects.filter(sub => sub.id >= 1 && sub.id <= 140);
-        
-        let optionsList = [];
-        let textDict = {};
-        let enTextDict = {};
-        let n = 1;
-
-        for (const subject of subjectsList) {
-            const value = `@i18n@options_1_name_${n}`;
-            const optionsId = `options_1_id_${n}`;
-            textDict[value] = subject.third_level_subjects;
-            enTextDict[value] = subject.third_level_subjects_en;
-
-            optionsList.push({
-                id: optionsId,
-                value: value,
-                isDefault: false
-            });
-            n++;
-        }
-
+        const dataList = await larkApi.getDepartmentProductLine();
         const result = {
             code: 0,
             msg: "success!",
             data: {
                 result: {
-                    options: optionsList,
-                    i18nResources: [
-                        {
-                            locale: "zh_cn",
-                            isDefault: false,
-                            texts: textDict
-                        },
-                        {
-                            locale: "en_us",
-                            isDefault: false,
-                            texts: enTextDict
-                        }
-                    ],
+                    options: dataList.map((d, i) => ({
+                        id: `options_id_${i}`,
+                        value: d.departmentProductLine,
+                        isDefault: false
+                    })),
                     hasMore: false,
                     nextPageToken: "xxxx"
                 }
             }
         };
-
         return res.json(result);
     } catch (e) {
-        console.error('Error in /get_third_level_subjects:', e);
+        console.error('Error in /get_department_product_line:', e);
         return res.status(500).json({ code: 1, msg: "failed", data: {} });
     }
 });
 
 /**
- * POST /budget_num
- * Replicates the Python function to get budget numbers based on a linked subject.
+ * POST /get_hod
+ * Fetches the HOD data based on a selected department.
  */
-app.post('/budget_num', (req, res) => {
+app.post('/get_hod', async (req, res) => {
     try {
-        const linkageParams = req.body.linkage_params;
-        if (!linkageParams || !linkageParams.subject) {
-            return res.json({ code: 1, msg: "参数错误!", data: { result: { options: [] } } });
+        const department = req.body.linkage_params?.department;
+        if (!department) {
+            return res.json({ code: 1, msg: "Parameter error!", data: { result: { options: [] } } });
         }
-        
-        let thirdSubject = linkageParams.subject;
-
-        // Check if the subject is English and find its Chinese equivalent
-        if (!containsChinese(thirdSubject)) {
-            const subject = accountingSubjects.find(s => s.third_level_subjects_en === thirdSubject);
-            if (subject) {
-                thirdSubject = subject.third_level_subjects;
-            } else {
-                return res.json({ code: 1, msg: "参数错误!", data: { result: { options: [] } } });
-            }
-        }
-
-        // --- EDITED SECTION ---
-        // We're removing the date filter and the "N/A" fallback to get all available budget numbers.
-        // In a real application, you would replace this with a database query that
-        // filters by thirdSubject.
-        const subjectsList = budgetData.filter(item => 
-            item.third_level_subjects === thirdSubject
-        ).map(item => ({ budget_num: item.budget_num }));
-
-        let optionsList = [];
-        let textDict = {};
-        let enTextDict = {};
-        let n = 1;
-
-        for (const subject of subjectsList) {
-            const value = `@i18n@options_1_name_b_${n}`;
-            const optionsId = `options_1_id_b_${n}`;
-            const budget = subject.budget_num;
-            textDict[value] = budget;
-            enTextDict[value] = budget;
-
-            optionsList.push({
-                id: optionsId,
-                value: value,
-                isDefault: false
-            });
-            n++;
-        }
-        // --- END OF EDITED SECTION ---
-
+        const dataList = await larkApi.getHOD(department);
         const result = {
             code: 0,
             msg: "success!",
             data: {
                 result: {
-                    options: optionsList,
-                    i18nResources: [
-                        {
-                            locale: "zh_cn",
-                            isDefault: false,
-                            texts: textDict
-                        },
-                        {
-                            locale: "en_us",
-                            isDefault: false,
-                            texts: enTextDict
-                        }
-                    ],
+                    options: dataList.map((d, i) => ({
+                        id: `options_id_${i}`,
+                        value: d.hod,
+                        isDefault: false
+                    })),
                     hasMore: false,
                     nextPageToken: "xxxx"
                 }
             }
         };
-
         return res.json(result);
     } catch (e) {
-        console.error('Error in /budget_num:', e);
+        console.error('Error in /get_hod:', e);
         return res.status(500).json({ code: 1, msg: "failed", data: {} });
     }
 });
 
 /**
- * POST /get_loan_note
- * Replicates the Python function to get loan note numbers.
+ * POST /get_hod_limit
+ * Fetches the HODLimit data based on a selected department.
  */
-app.post('/get_loan_note', (req, res) => {
+app.post('/get_hod_limit', async (req, res) => {
     try {
-        // Simulated database query
-        const subjectsList = loanNotes.filter(note => note.status === '已通过' && note.verify === '').map(note => ({ lark_num: note.lark_num }));
-
-        let optionsList = [];
-        let textDict = {};
-        let n = 1;
-
-        for (const subject of subjectsList) {
-            const value = `@i18n@options_1_name_n_${n}`;
-            const optionsId = `options_1_id_n_${n}`;
-            textDict[value] = subject.lark_num;
-
-            optionsList.push({
-                id: optionsId,
-                value: value,
-                isDefault: false
-            });
-            n++;
+        const department = req.body.linkage_params?.department;
+        if (!department) {
+            return res.json({ code: 1, msg: "Parameter error!", data: { result: { options: [] } } });
         }
-
+        const dataList = await larkApi.getHODLimit(department);
         const result = {
             code: 0,
             msg: "success!",
             data: {
                 result: {
-                    options: optionsList,
-                    i18nResources: [
-                        {
-                            locale: "zh_cn",
-                            isDefault: true,
-                            texts: textDict
-                        },
-                        {
-                            locale: "en_us",
-                            isDefault: true,
-                            texts: textDict
-                        }
-                    ],
+                    options: dataList.map((d, i) => ({
+                        id: `options_id_${i}`,
+                        value: d.hodLimit,
+                        isDefault: false
+                    })),
                     hasMore: false,
                     nextPageToken: "xxxx"
                 }
             }
         };
-
         return res.json(result);
     } catch (e) {
-        console.error('Error in /get_loan_note:', e);
+        console.error('Error in /get_hod_limit:', e);
         return res.status(500).json({ code: 1, msg: "failed", data: {} });
     }
 });
 
 /**
- * POST /get_loan_currency
- * Replicates the Python function to get the currency for a specific loan number.
+ * POST /get_2nd_tier
+ * Fetches the 2ndTier data based on a selected department.
  */
-app.post('/get_loan_currency', (req, res) => {
+app.post('/get_2nd_tier', async (req, res) => {
     try {
-        const linkageParams = req.body.linkage_params;
-        if (!linkageParams || !linkageParams.number) {
-            return res.json({ code: 1, msg: "参数错误!", data: { result: { options: [] } } });
+        const department = req.body.linkage_params?.department;
+        if (!department) {
+            return res.json({ code: 1, msg: "Parameter error!", data: { result: { options: [] } } });
         }
-        
-        const number = linkageParams.number;
-        
-        // Simulated database query
-        const subject = loanNotes.find(note => note.lark_num === number);
-        const subjects = subject ? subject.currency : null;
-
-        if (!subjects) {
-            return res.json({ code: 1, msg: "未找到借款单号!", data: { result: { options: [] } } });
-        }
-
-        let optionsList = [];
-        let textDict = {};
-        const value = `@i18n@options_1_name_l_${1}`;
-        const optionsId = `options_1_id_l_${1}`;
-        textDict[value] = subjects;
-
-        optionsList.push({
-            id: optionsId,
-            value: value,
-            isDefault: false
-        });
-
+        const dataList = await larkApi.get2ndTier(department);
         const result = {
             code: 0,
             msg: "success!",
             data: {
                 result: {
-                    options: optionsList,
-                    i18nResources: [
-                        {
-                            locale: "zh_cn",
-                            isDefault: true,
-                            texts: textDict
-                        },
-                        {
-                            locale: "en_us",
-                            isDefault: true,
-                            texts: textDict
-                        }
-                    ],
+                    options: dataList.map((d, i) => ({
+                        id: `options_id_${i}`,
+                        value: d.secondTier,
+                        isDefault: false
+                    })),
                     hasMore: false,
                     nextPageToken: "xxxx"
                 }
             }
         };
-
         return res.json(result);
     } catch (e) {
-        console.error('Error in /get_loan_currency:', e);
+        console.error('Error in /get_2nd_tier:', e);
         return res.status(500).json({ code: 1, msg: "failed", data: {} });
     }
 });
 
 /**
- * POST /get_loan_amount
- * Replicates the Python function to get the amount for a specific loan number.
+ * POST /get_2nd_tier_limit
+ * Fetches the 2ndTierLimit data based on a selected department.
  */
-app.post('/get_loan_amount', (req, res) => {
+app.post('/get_2nd_tier_limit', async (req, res) => {
     try {
-        const linkageParams = req.body.linkage_params;
-        if (!linkageParams || !linkageParams.number) {
-            return res.json({ code: 1, msg: "参数错误!", data: { result: { options: [] } } });
+        const department = req.body.linkage_params?.department;
+        if (!department) {
+            return res.json({ code: 1, msg: "Parameter error!", data: { result: { options: [] } } });
         }
-        
-        const number = linkageParams.number;
-        
-        // Simulated database query
-        const subject = loanNotes.find(note => note.lark_num === number);
-        const subjects = subject ? subject.amount : null;
-
-        if (!subjects) {
-            return res.json({ code: 1, msg: "未找到借款单号!", data: { result: { options: [] } } });
-        }
-
-        let optionsList = [];
-        let textDict = {};
-        const value = `@i18n@options_1_name_a_1`;
-        const optionsId = `options_1_id_a_1`;
-        textDict[value] = subjects;
-
-        optionsList.push({
-            id: optionsId,
-            value: value,
-            isDefault: false
-        });
-
+        const dataList = await larkApi.get2ndTierLimit(department);
         const result = {
             code: 0,
             msg: "success!",
             data: {
                 result: {
-                    options: optionsList,
-                    i18nResources: [
-                        {
-                            locale: "zh_cn",
-                            isDefault: true,
-                            texts: textDict
-                        },
-                        {
-                            locale: "en_us",
-                            isDefault: true,
-                            texts: textDict
-                        }
-                    ],
+                    options: dataList.map((d, i) => ({
+                        id: `options_id_${i}`,
+                        value: d.secondTierLimit,
+                        isDefault: false
+                    })),
                     hasMore: false,
                     nextPageToken: "xxxx"
                 }
             }
         };
-
         return res.json(result);
     } catch (e) {
-        console.error('Error in /get_loan_amount:', e);
+        console.error('Error in /get_2nd_tier_limit:', e);
         return res.status(500).json({ code: 1, msg: "failed", data: {} });
     }
 });
 
 /**
- * POST /get_loan_title
- * Replicates the Python function to get the title for a specific loan number.
+ * POST /get_ceo
+ * Fetches the CEO data based on a selected department.
  */
-app.post('/get_loan_title', (req, res) => {
+app.post('/get_ceo', async (req, res) => {
     try {
-        const linkageParams = req.body.linkage_params;
-        if (!linkageParams || !linkageParams.number) {
-            return res.json({ code: 1, msg: "参数错误!", data: { result: { options: [] } } });
+        const department = req.body.linkage_params?.department;
+        if (!department) {
+            return res.json({ code: 1, msg: "Parameter error!", data: { result: { options: [] } } });
         }
-        
-        const number = linkageParams.number;
-        
-        // Simulated database query
-        const subject = loanNotes.find(note => note.lark_num === number);
-        const subjects = subject ? subject.lark_title : null;
-
-        let optionsList = [];
-        let textDict = {};
-        const value = `@i18n@options_1_name_t_1`;
-        const optionsId = `options_1_id_t_1`;
-        textDict[value] = subjects || "N/A";
-
-        optionsList.push({
-            id: optionsId,
-            value: value,
-            isDefault: false
-        });
-
+        const dataList = await larkApi.getCEO(department);
         const result = {
             code: 0,
             msg: "success!",
             data: {
                 result: {
-                    options: optionsList,
-                    i18nResources: [
-                        {
-                            locale: "zh_cn",
-                            isDefault: true,
-                            texts: textDict
-                        },
-                        {
-                            locale: "en_us",
-                            isDefault: true,
-                            texts: textDict
-                        }
-                    ],
+                    options: dataList.map((d, i) => ({
+                        id: `options_id_${i}`,
+                        value: d.ceo,
+                        isDefault: false
+                    })),
                     hasMore: false,
                     nextPageToken: "xxxx"
                 }
             }
         };
-
         return res.json(result);
     } catch (e) {
-        console.error('Error in /get_loan_title:', e);
+        console.error('Error in /get_ceo:', e);
         return res.status(500).json({ code: 1, msg: "failed", data: {} });
     }
 });
