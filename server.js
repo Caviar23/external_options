@@ -225,6 +225,24 @@ class CWLarkAPI {
             ceo: record.fields.CEO
         }));
     }
+
+    /**
+     * Fetches third level subjects and their English translations.
+     * @returns {Promise<Array>} An array of records.
+     */
+    async getThirdLevelSubjects() {
+        const baseId = 'Gflaw9RBkiaHAokB4axlHLpygVb'; // Replace with your Base ID
+        const tableId = 'tblLSW8oShBhPOZg'; // Replace with your Table ID
+        // Specify both Chinese and English field names to fetch
+        const fieldNames = JSON.stringify(["Department/ProductLine"]);
+
+        const records = await this.getRecords(baseId, tableId, '', fieldNames);
+
+        return records.map(record => ({
+            cn: record.fields.third_level_subjects,
+            en: record.fields.third_level_subjects_en
+        }));
+    }
 }
 
 // Instantiate the API client as a singleton
@@ -280,6 +298,64 @@ app.post('/get_department_product_line', async (req, res) => {
         return res.json(result);
     } catch (e) {
         console.error('Error in /get_department_product_line:', e);
+        return res.status(500).json({ code: 1, msg: "failed", data: {} });
+    }
+});
+
+/**
+ * POST /get_third_level_subjects
+ * Fetches third-level subject data with internationalization resources.
+ */
+app.post('/get_third_level_subjects', async (req, res) => {
+    try {
+        const dataList = await larkApi.getThirdLevelSubjects();
+        const optionsList = [];
+        const zhCnTexts = {};
+        const enUsTexts = {};
+
+        dataList.forEach((subject, index) => {
+            const value = `@i18n@options_1_name_${index + 1}`;
+            const optionsId = `options_1_id_${index + 1}`;
+            
+            // Populate the options list
+            optionsList.push({
+                id: optionsId,
+                value: value,
+                isDefault: false
+            });
+
+            // Populate the i18n text dictionaries
+            zhCnTexts[value] = subject.cn;
+            enUsTexts[value] = subject.en;
+        });
+
+        const result = {
+            code: 0,
+            msg: "success!",
+            data: {
+                result: {
+                    options: optionsList,
+                    i18nResources: [
+                        {
+                            locale: "zh_cn",
+                            isDefault: false,
+                            texts: zhCnTexts
+                        },
+                        {
+                            locale: "en_us",
+                            isDefault: false,
+                            texts: enUsTexts
+                        }
+                    ],
+                    hasMore: false,
+                    nextPageToken: "xxxx"
+                }
+            }
+        };
+
+        return res.json(result);
+    } catch (e) {
+        console.error('Error in /get_third_level_subjects:', e);
         return res.status(500).json({ code: 1, msg: "failed", data: {} });
     }
 });
