@@ -54,7 +54,7 @@ class CWLarkAPI {
      * @returns {Promise<string>} The access token.
      */
     async _getAppToken() {
-        const url = "https://open.larksuite.com/open-apis/auth/v3/app_access_token/internal";
+        const url = "https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal";
         const headers = {
             "Content-Type": "application/json; charset=utf-8"
         };
@@ -98,7 +98,8 @@ class CWLarkAPI {
      */
     async getRecords(baseId, tableId, filters = '', fieldNames = '', viewId = '', pageSize = 100) {
         const token = await this.getToken();
-        const url = `https://casinoplus.sg.larksuite.com/wiki/${baseId}?table=${tableId}&view=vewa7hu3aU`;
+        // CORRECT URL for Lark Base API:
+        const url = `https://open.larksuite.com/open-apis/bitable/v1/apps/${baseId}/tables/${tableId}/records`;
         const headers = { "Authorization": `Bearer ${token}` };
         const params = {
             page_size: pageSize,
